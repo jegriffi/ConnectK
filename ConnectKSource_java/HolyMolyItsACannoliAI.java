@@ -7,10 +7,10 @@ import java.util.List;
 import java.util.PriorityQueue;
 
 
-public class DummyAI extends CKPlayer {
+public class HolyMolyItsACannoliAI extends CKPlayer {
 	public byte player;
 
-	public DummyAI(byte player, BoardModel state) {
+	public HolyMolyItsACannoliAI(byte player, BoardModel state) {
 		super(player, state);
 		teamName = "HolyMolyItsACannoli";
 		this.player = player;
@@ -20,8 +20,12 @@ public class DummyAI extends CKPlayer {
 		if (depth == 0 || !state.hasMovesLeft()) {
 			return null;
 		}
-				
-		PriorityQueue<PointWithHeuristic> pq = getListOfAllGravityOnMoves(state, this.player);
+		PriorityQueue<PointWithHeuristic> pq;
+		
+		if (state.gravityEnabled())
+			pq = getListOfAllGravityOnMoves(state, this.player);
+		else 
+			pq = getListOfAllNoGravityMoves(state);
 		PointWithHeuristic pwh = pq.remove();
 		return pwh.getPoint();
 	}
@@ -39,7 +43,6 @@ public class DummyAI extends CKPlayer {
 	}
 	
 	private PriorityQueue<PointWithHeuristic> getListOfAllGravityOnMoves(BoardModel state, byte player) {
-		List<Point> points = new ArrayList<>();
 		Comparator<PointWithHeuristic> comparator = new HeuristicsComparator();
 		PriorityQueue<PointWithHeuristic> pq = new PriorityQueue<PointWithHeuristic>(100, comparator);
 		
@@ -47,7 +50,6 @@ public class DummyAI extends CKPlayer {
 		for (int i = 0; i < state.getWidth(); i++) {
 			for (int j = 0; j < state.getHeight(); j++) {
 				if (isValidGravityMove(state, new Point(i, j))) {
-					points.add(new Point(i, j));
 					int h = surroundingTiles(state, player, new Point(i, j));
 					pq.add(new PointWithHeuristic(new Point(i, j), h));
 				}
@@ -56,15 +58,16 @@ public class DummyAI extends CKPlayer {
 		return pq;
 	}
 	
-	private List<Point> getListOfAllNoGravityMoves(BoardModel state) {
-		List<Point> points = new ArrayList<>();
+	private PriorityQueue<PointWithHeuristic> getListOfAllNoGravityMoves(BoardModel state) {
+		Comparator<PointWithHeuristic> comparator = new HeuristicsComparator();
+		PriorityQueue<PointWithHeuristic> pq = new PriorityQueue<PointWithHeuristic>(100, comparator);
 		for (int i = 0; i < state.getWidth(); i++) {
 			for (int j = 0; j < state.getHeight(); j++) {
 				if (state.getSpace(i,j) == 0)
-					points.add(new Point(i,j));
+					pq.add(new PointWithHeuristic(new Point(i,j), 1));
 			}
 		}
-		return points;
+		return pq;
 	}
 
 	@Override
