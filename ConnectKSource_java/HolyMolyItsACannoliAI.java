@@ -16,22 +16,6 @@ public class HolyMolyItsACannoliAI extends CKPlayer {
 		this.player = player;
 	}
 	
-	protected Point minMaxGravityOnMove(BoardModel state, int depth, byte player) {
-		if (depth == 0 || !state.hasMovesLeft()) {
-			return null;
-		}
-		PriorityQueue<PointWithHeuristic> pq;
-		
-		if (state.gravityEnabled())
-			pq = getListOfAllGravityOnMoves(state, this.player);
-		else 
-			pq = getListOfAllNoGravityMoves(state);
-		PointWithHeuristic pwh = pq.remove();
-		return pwh.getPoint();
-	}
-	
-	
-	
 	private boolean isValidGravityMove(BoardModel state, Point p) {
 		int i = (int)p.getX();
 		int j = (int)p.getY();
@@ -42,66 +26,196 @@ public class HolyMolyItsACannoliAI extends CKPlayer {
 		return false;		
 	}
 	
-	private PriorityQueue<PointWithHeuristic> getListOfAllGravityOnMoves(BoardModel state, byte player) {
-		Comparator<PointWithHeuristic> comparator = new HeuristicsComparator();
-		PriorityQueue<PointWithHeuristic> pq = new PriorityQueue<PointWithHeuristic>(100, comparator);
+	private List<Point> getListOfAllGravityOnMoves(BoardModel state, byte player) {
+		List<Point> moveList = new ArrayList<>();
 		
-		//TODO switch to priority queue and pop them off incrementally
-		for (int i = 0; i < state.getWidth(); i++) {
-			for (int j = 0; j < state.getHeight(); j++) {
-				if (isValidGravityMove(state, new Point(i, j))) {
-					int h = surroundingTiles(state, player, new Point(i, j));
-					pq.add(new PointWithHeuristic(new Point(i, j), h));
+		for(int x = 0; x < state.getWidth(); x++) {
+			for (int y = 0; y < state.getHeight(); y++) {
+				Point p = new Point(x, y);
+				if (isValidGravityMove(state, p)) {
+					moveList.add(p);
 				}
 			}
 		}
-		return pq;
+		return moveList;
 	}
 	
-	private PriorityQueue<PointWithHeuristic> getListOfAllNoGravityMoves(BoardModel state) {
-		Comparator<PointWithHeuristic> comparator = new HeuristicsComparator();
-		PriorityQueue<PointWithHeuristic> pq = new PriorityQueue<PointWithHeuristic>(100, comparator);
-		for (int i = 0; i < state.getWidth(); i++) {
-			for (int j = 0; j < state.getHeight(); j++) {
-				if (state.getSpace(i,j) == 0)
-					pq.add(new PointWithHeuristic(new Point(i,j), 1));
+	private List<Point> getListOfAllGravityOffMoves(BoardModel state, byte player) {
+		List<Point> moveList = new ArrayList<>();
+		
+		for (int x = 0; x < state.getWidth(); x++) {
+			for (int y = 0; y < state.getHeight(); y++) {
+				if (state.getSpace(x, y) == 0) {
+					moveList.add(new Point(x, y));
+				}
 			}
 		}
-		return pq;
+		return moveList;
 	}
+	
+	//bU is the point above
+	//bL is the point to left
+	//bD is point diagonal
+	private int DPHeuristic(BoardModel state, byte maxPlayer) {
+		byte[][] board = new byte[2][state.getHeight()];
+		int maxSum = 0, minSum = 0, width = state.getWidth(), height = state.getHeight();
+		byte minPlayer = 0;
+		if (maxPlayer == 1) 
+			minPlayer = 2;
+		else if (maxPlayer == 2) 
+			minPlayer = 1;
+		
+		// initial column
+		for (int y = height - 1; y >= 0; y--) {
+			byte b = state.getSpace(0, y);
+			if (b != 0) { // not empty square				
+				if ((y+1) < height) {
+					byte bU = state.getSpace(0, y+1);
+					if (b == minPlayer) {  // is adversary						
+						if (bU == minPlayer)  //if is also adversary
+							board[0][y] = (byte)(((byte) -1) + board[0][y+1]);						
+						else 
+							board[0][y] = (byte) -1;
+						minSum += board[0][y];
+					}
+					else { // is you
+						if (bU == maxPlayer) 
+							board[0][y] = (byte) (((byte) 1) + board[0][y+1]);
+						else
+							board[0][y] = (byte) 1;
+						maxSum += board[0][y];
+					}
+				}
+				else { //top of stack
+					if (b == minPlayer)
+						board[0][y] = -1;
+					if (b == maxPlayer)
+						board[0][y] = 1;
+				}
+			}
+			else {
+				board[0][y] = (byte) 0;
+			}
+		}
+		
+		//subsequent columns
+		for (int x = 1; x < width; x++) {
+			for (int y = height - 1; y >= 0; y--) {
+				byte b = state.getSpace(x-1, y);
+				byte bU, bL, bD;
+				board[1][y] = (byte) 0;
+				if (b != 0) { //not empty					
+					if ((y+1) < height) {
+						bU = state.getSpace(x, y+1);
+						bD = state.getSpace(x-1, y+1);
+						if (b == minPlayer) {
+							if (bU == minPlayer) 
+								board[1][y] += (byte) (board[1][y+1]);
+							if (bD == minPlayer)
+								board[1][y] += (byte) (board[0][y+1]);							
+						}
+						else {
+							if (bU == maxPlayer) 
+								board[1][y] += (byte) (board[1][y+1]);
+							if (bD == maxPlayer)
+								board[1][y] += (byte)(board[0][y+1]);							
+						}
+					} else {//add check if b is not empty
+						if (b == minPlayer)
+							board[1][y] = -1;
+						if (b == maxPlayer)
+							board[1][y] = 1;
+					}
+					bL = state.getSpace(x-1, y);
+					if(b == minPlayer) {
+						board[1][y] += (byte) -1;
+						if (bL == minPlayer) 
+							board[1][y] += (byte) (board[0][y]);
+						minSum += board[1][y];
+					}
+					else {
+						board[1][y] += (byte) 1;
+						if (bL == maxPlayer)
+							board[1][y] += (byte) (board[0][y]);	
+						maxSum += board[1][y];
+					}
+				}
+				// moves over unused elements to save on space
+				if (y == 0) {
+					board[0][y+2] = board[1][y+2];
+					board[0][y+1] = board[1][y+1];
+					board[0][y] = board[1][y];
+				}
+				else {
+					if ((height - y) > 2) 
+						board[0][y+2] = board[1][y+2];							
+				}				
+			}
+		}
+		
+		return (maxSum-minSum);
+	}
+	
+	protected int miniMaxGravityOnMove(BoardModel state, int depth, byte maxPlayer) {
+		if (depth == 0 || !state.hasMovesLeft()) {
+			return DPHeuristic(state, maxPlayer);
+		}
+		List<Point> moveList = getListOfAllGravityOnMoves(state, maxPlayer);
+		int bestVal = 0;
+		
+		if (maxPlayer == (byte) 1) {
+			bestVal = Integer.MIN_VALUE;
+			for (Point p : moveList) {
+				BoardModel tmpMove = state.clone();
+				tmpMove.placePiece(p, ((byte) 1));
+				int v = miniMaxGravityOnMove(tmpMove, depth - 1, (byte) 2);
+				bestVal = Math.max(bestVal, v);
+			}
+			return bestVal;
+		} else {
+			bestVal = Integer.MAX_VALUE;
+			for (Point p: moveList) {
+				BoardModel tmpMove = state.clone();
+				tmpMove.placePiece(p, ((byte) -1));
+				int v = miniMaxGravityOnMove(tmpMove, depth-1, (byte) 1);
+				bestVal = Math.min(bestVal, v);
+			}
+			return bestVal;
+		}		
+	}
+	
 
 	@Override
 	public Point getMove(BoardModel state) {
-		return minMaxGravityOnMove(state, 1, player);
-//		for(int i=0; i<state.getWidth(); ++i)
-//			for(int j=0; j<state.getHeight(); ++j) {
-//				if(state.getSpace(i, j) == 0) {
-//					return new Point(i,j);
-//				}
-//			}
-//
-//		return null;
+		List<Point> moveList;
+		Comparator<PointWithHeuristic> comparator = new HeuristicsComparator();
+		PriorityQueue<PointWithHeuristic> pq = new PriorityQueue<PointWithHeuristic>(100, comparator);
+		int depth = 0;
+		if (state.gravityEnabled()) {
+			depth = 9;
+			moveList = getListOfAllGravityOnMoves(state, this.player);
+		} else {
+			depth = 4;
+			moveList = getListOfAllGravityOffMoves(state, this.player);
+		}
+		for (Point p : moveList) {
+			int bestVal = Integer.MIN_VALUE;
+			BoardModel tmpMove = state.clone();
+			tmpMove.placePiece(p, player);
+			int v = miniMaxGravityOnMove(tmpMove, depth, (byte) 2);
+			bestVal = Math.max(bestVal, v);
+			PointWithHeuristic pwh = new PointWithHeuristic(p, bestVal);
+			pq.add(pwh);
+		}
+		
+		
+		return pq.remove().getPoint();
 	}
 
 	//Deadline checks the time left for you to make a move (something like that)
 	@Override
 	public Point getMove(BoardModel state, int deadline) {
 		return getMove(state);
-	}
-	
-	//basic heuristic
-	public int surroundingTiles(BoardModel state, byte player, Point p) {
-		int x = (int)p.getX(), y = (int)p.getY(), count = 0, 
-				maxHeight = state.getHeight(), maxWidth = state.getWidth();
-		for (int i = x-1; i < x+1; i++) {
-			for (int j = y-1; j < y+1; j++) {
-				if (i != x && j != y && i >= 0 && i < maxWidth && j >= 0 && j < maxHeight) {
-					if (state.getSpace(i, j) == player)
-						count++;
-				}
-			}
-		}
-		return count;
 	}
 	
 	//to be put into priorityQ
