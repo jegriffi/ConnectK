@@ -9,11 +9,20 @@ import java.util.PriorityQueue;
 
 public class HolyMolyItsACannoliAI extends CKPlayer {
 	public byte player;
+	public byte otherPlayer;
 
 	public HolyMolyItsACannoliAI(byte player, BoardModel state) {
 		super(player, state);
 		teamName = "HolyMolyItsACannoli";
 		this.player = player;
+		this.otherPlayer = getOtherPlayer();
+	}
+	
+	private byte getOtherPlayer() {
+		if (this.player == 1) 
+			return (byte) 2;
+		else
+			return (byte) 1;
 	}
 	
 	private boolean isValidGravityMove(BoardModel state, Point p) {
@@ -21,7 +30,9 @@ public class HolyMolyItsACannoliAI extends CKPlayer {
 		int j = (int)p.getY();
 		if (state.getSpace(i, j) == 0) {
 			if ((j-1) >= 0 && state.getSpace(i, j-1) != 0) //something directly underneath
-				return true;				
+				return true;
+			if (j == 0 && state.getSpace(i, j) == 0) 
+				return true;
 		}
 		return false;		
 	}
@@ -156,29 +167,33 @@ public class HolyMolyItsACannoliAI extends CKPlayer {
 		return (maxSum-minSum);
 	}
 	
-	protected int miniMaxGravityOnMove(BoardModel state, int depth, byte maxPlayer) {
+	protected int alphaBetaPruningGravityOnMove(BoardModel state, int depth, int alpha, int beta, byte maxPlayer) {
 		if (depth == 0 || !state.hasMovesLeft()) {
 			return DPHeuristic(state, maxPlayer);
 		}
 		List<Point> moveList = getListOfAllGravityOnMoves(state, maxPlayer);
 		int bestVal = 0;
 		
-		if (maxPlayer == (byte) 1) {
-			bestVal = Integer.MIN_VALUE;
+		if (maxPlayer == this.player) {
+			int v = Integer.MIN_VALUE;
 			for (Point p : moveList) {
 				BoardModel tmpMove = state.clone();
 				tmpMove.placePiece(p, ((byte) 1));
-				int v = miniMaxGravityOnMove(tmpMove, depth - 1, (byte) 2);
-				bestVal = Math.max(bestVal, v);
+				v = Math.max(bestVal, alphaBetaPruningGravityOnMove(tmpMove, depth - 1, alpha, beta, (byte) 2));
+				alpha = Math.max(bestVal, v);
+				if (beta <= alpha)
+					break;
 			}
 			return bestVal;
 		} else {
-			bestVal = Integer.MAX_VALUE;
+			int v = Integer.MAX_VALUE;
 			for (Point p: moveList) {
 				BoardModel tmpMove = state.clone();
-				tmpMove.placePiece(p, ((byte) -1));
-				int v = miniMaxGravityOnMove(tmpMove, depth-1, (byte) 1);
-				bestVal = Math.min(bestVal, v);
+				tmpMove.placePiece(p, ((byte) 2));
+				v = Math.min(v, alphaBetaPruningGravityOnMove(tmpMove, depth-1, alpha, beta, (byte) 1));
+				beta = Math.min(bestVal, v);
+				if (beta <= alpha) 
+					break;
 			}
 			return bestVal;
 		}		
@@ -192,24 +207,22 @@ public class HolyMolyItsACannoliAI extends CKPlayer {
 		PriorityQueue<PointWithHeuristic> pq = new PriorityQueue<PointWithHeuristic>(100, comparator);
 		int depth = 0;
 		if (state.gravityEnabled()) {
-			depth = 9;
+			depth = 5;
 			moveList = getListOfAllGravityOnMoves(state, this.player);
 		} else {
 			depth = 4;
 			moveList = getListOfAllGravityOffMoves(state, this.player);
 		}
+	
 		for (Point p : moveList) {
 			int bestVal = Integer.MIN_VALUE;
 			BoardModel tmpMove = state.clone();
-			tmpMove.placePiece(p, player);
-			int v = miniMaxGravityOnMove(tmpMove, depth, (byte) 2);
+			tmpMove.placePiece(p, this.player);
+			int v = alphaBetaPruningGravityOnMove(tmpMove, depth, Integer.MIN_VALUE, Integer.MAX_VALUE, this.otherPlayer);
 			bestVal = Math.max(bestVal, v);
 			PointWithHeuristic pwh = new PointWithHeuristic(p, bestVal);
 			pq.add(pwh);
-		}
-		
-		
-		return pq.remove().getPoint();
+		}		return pq.remove().getPoint();
 	}
 
 	//Deadline checks the time left for you to make a move (something like that)
