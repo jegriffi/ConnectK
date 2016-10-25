@@ -29,10 +29,10 @@ public class HolyMolyItsACannoliAI extends CKPlayer {
 		int i = (int)p.getX();
 		int j = (int)p.getY();
 		if (state.getSpace(i, j) == 0) {
-			if ((j-1) >= 0 && state.getSpace(i, j-1) != 0) //something directly underneath
-				return true;
 			if (j == 0 && state.getSpace(i, j) == 0) 
 				return true;
+			if ((j-1) >= 0 && state.getSpace(i, j-1) != 0) //something directly underneath
+				return true;			
 		}
 		return false;		
 	}
@@ -167,35 +167,196 @@ public class HolyMolyItsACannoliAI extends CKPlayer {
 		return (maxSum-minSum);
 	}
 	
+	private int consecutiveHelper(BoardModel state, int x, int y, byte player) {
+		boolean breakflag = false;
+		int playerOpportunity = 1, leftDiagonal = 1, rightDiagonal = 1, vertical = 1, horizontal = 1,
+				opportunityVal = 5, currentSpace;
+		
+		//LUD
+		for (int i = x-1; i >= 0; i--) {
+			if (breakflag)
+				break;
+			for (int j = y+1; j < state.getHeight(); j++) {
+				currentSpace = state.getSpace(i, j);
+				if (currentSpace != player) {
+					if (currentSpace == 0)  
+						playerOpportunity += opportunityVal;
+					breakflag = true;
+					break;
+				}
+				if (currentSpace == player) {
+					if (++leftDiagonal >= state.getkLength())
+						return Integer.MAX_VALUE;
+				}
+			}
+		}
+		
+		breakflag = false;
+		//LLD
+		for (int i = x-1; i >= 0; i--) {
+			if (breakflag)
+				break;
+			for (int j = y-1; j > 0; j--) {
+				currentSpace = state.getSpace(i, j);
+				if (currentSpace != player) {
+					if (currentSpace == 0) 
+						playerOpportunity += opportunityVal;
+					breakflag = true;
+					break;
+				}
+				if (currentSpace == player) {
+					if (++leftDiagonal >= state.getkLength())
+						return Integer.MAX_VALUE;
+				}
+			}
+		}
+		
+		breakflag = false;
+		//RUD
+		for (int i = x+1; i < state.getWidth(); i++) {
+			if (breakflag)
+				break;
+			for (int j = y+1; j < state.getHeight(); j++) {
+				currentSpace = state.getSpace(i, j);
+				if (currentSpace != player) {
+					if (currentSpace == 0) 
+						playerOpportunity += opportunityVal;
+					breakflag = true;
+					break;
+				}
+				if (currentSpace == player) {
+					if (++rightDiagonal >= state.getkLength())
+						return Integer.MAX_VALUE;
+				}
+			}
+		}
+		
+		breakflag = false;
+		//RLD
+		for (int i = x+1; i < state.getWidth(); i++) {
+			if (breakflag)
+				break;
+			for (int j = y-1; j > 0; j--) {
+				currentSpace = state.getSpace(i, j);
+				if (currentSpace != player) {
+					if (currentSpace == 0) 
+						playerOpportunity += opportunityVal;
+					breakflag = true;
+					break;
+				}
+				if (currentSpace == player) {
+					if (++rightDiagonal >= state.getkLength())
+						return Integer.MAX_VALUE;
+				}
+			}
+		}
+		
+		breakflag = false;
+		//LH
+		for (int i = x-1; i >= 0; i--) {
+			int j = y;
+			currentSpace = state.getSpace(i, j);
+			if (currentSpace != player) {
+				if (currentSpace == 0) 
+					playerOpportunity += opportunityVal;
+				break;
+			}
+			else {
+				if (++horizontal >= state.getkLength()) 
+					return Integer.MAX_VALUE;
+			}			
+		}
+		
+		//RH
+		for (int i = x+1; i < state.getWidth(); i++) {
+			int j = y;
+			currentSpace = state.getSpace(i, j);
+			if (currentSpace != player) {
+				if (currentSpace == 0) 
+					playerOpportunity += opportunityVal;
+				break;
+			}
+			else {
+				if (++horizontal >= state.getkLength()) 
+					return Integer.MAX_VALUE;
+			}			
+		}
+		
+		//UV
+		for (int j = y+1; j < state.getHeight(); j++) {
+			int i = x;
+			currentSpace = state.getSpace(i, j);
+			if (currentSpace != player) {
+				if (currentSpace == 0) 
+					playerOpportunity += opportunityVal;
+				break;
+			}
+			else {
+				vertical++;
+				if (vertical >= state.getkLength()) 
+					return Integer.MAX_VALUE;
+			}			
+		}
+		System.out.println("vertical: " + vertical);
+		
+		//LV
+		for (int j = y-1; j >=0; j--) {
+			int i = x;
+			currentSpace = state.getSpace(i, j);
+			if (currentSpace != player) {
+				if (currentSpace == 0) 
+					playerOpportunity += opportunityVal;
+				break;
+			}
+			else {
+				if (++vertical >= state.getkLength()) 
+					return Integer.MAX_VALUE;
+			}			
+		}
+		
+		
+		return (playerOpportunity + rightDiagonal + leftDiagonal + vertical + horizontal);
+	}
+	
+	private int consecutiveTileHuristic(BoardModel state, byte player) {
+		int sum = 0;
+		for (int x = 0; x < state.getWidth(); x++) {
+			for (int y = 0; y < state.getHeight(); y++) {
+				sum += consecutiveHelper(state, x, y, player);
+			}
+		}
+		return sum;
+	}
 	protected int alphaBetaPruningGravityOnMove(BoardModel state, int depth, int alpha, int beta, byte maxPlayer) {
 		if (depth == 0 || !state.hasMovesLeft()) {
-			return DPHeuristic(state, maxPlayer);
+			int heuristic = consecutiveTileHuristic(state, maxPlayer);
+			//System.out.println("H: " + heuristic);
+			return heuristic;// + DPHeuristic(state, maxPlayer));
 		}
 		List<Point> moveList = getListOfAllGravityOnMoves(state, maxPlayer);
-		int bestVal = 0;
 		
 		if (maxPlayer == this.player) {
 			int v = Integer.MIN_VALUE;
 			for (Point p : moveList) {
 				BoardModel tmpMove = state.clone();
-				tmpMove.placePiece(p, ((byte) 1));
-				v = Math.max(bestVal, alphaBetaPruningGravityOnMove(tmpMove, depth - 1, alpha, beta, (byte) 2));
-				alpha = Math.max(bestVal, v);
+				tmpMove.placePiece(p, this.player);
+				v = Math.max(v, alphaBetaPruningGravityOnMove(tmpMove, depth - 1, alpha, beta, this.otherPlayer));
+				alpha = Math.max(alpha, v);
 				if (beta <= alpha)
 					break;
 			}
-			return bestVal;
+			return v;
 		} else {
 			int v = Integer.MAX_VALUE;
 			for (Point p: moveList) {
 				BoardModel tmpMove = state.clone();
-				tmpMove.placePiece(p, ((byte) 2));
-				v = Math.min(v, alphaBetaPruningGravityOnMove(tmpMove, depth-1, alpha, beta, (byte) 1));
-				beta = Math.min(bestVal, v);
+				tmpMove.placePiece(p, this.otherPlayer);
+				v = Math.min(v, alphaBetaPruningGravityOnMove(tmpMove, depth-1, alpha, beta, this.player));
+				beta = Math.min(beta, v);
 				if (beta <= alpha) 
 					break;
 			}
-			return bestVal;
+			return v;
 		}		
 	}
 	
@@ -207,7 +368,7 @@ public class HolyMolyItsACannoliAI extends CKPlayer {
 		PriorityQueue<PointWithHeuristic> pq = new PriorityQueue<PointWithHeuristic>(100, comparator);
 		int depth = 0;
 		if (state.gravityEnabled()) {
-			depth = 5;
+			depth = 1;
 			moveList = getListOfAllGravityOnMoves(state, this.player);
 		} else {
 			depth = 4;
@@ -215,14 +376,16 @@ public class HolyMolyItsACannoliAI extends CKPlayer {
 		}
 	
 		for (Point p : moveList) {
-			int bestVal = Integer.MIN_VALUE;
+			int v = Integer.MIN_VALUE;
 			BoardModel tmpMove = state.clone();
 			tmpMove.placePiece(p, this.player);
-			int v = alphaBetaPruningGravityOnMove(tmpMove, depth, Integer.MIN_VALUE, Integer.MAX_VALUE, this.otherPlayer);
-			bestVal = Math.max(bestVal, v);
-			PointWithHeuristic pwh = new PointWithHeuristic(p, bestVal);
+			v = Math.max(v, alphaBetaPruningGravityOnMove(tmpMove, depth, Integer.MIN_VALUE, Integer.MAX_VALUE, this.otherPlayer));
+			//System.out.println("bestVal for " + p.getX() + ":" + p.getY() + " is - " + bestVal);
+			PointWithHeuristic pwh = new PointWithHeuristic(p, v);
 			pq.add(pwh);
-		}		return pq.remove().getPoint();
+		}		
+		
+		return pq.remove().getPoint();
 	}
 
 	//Deadline checks the time left for you to make a move (something like that)
