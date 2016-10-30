@@ -37,7 +37,7 @@ public class HolyMolyItsACannoliAI extends CKPlayer {
 		return false;		
 	}
 	
-	private List<Point> getListOfAllGravityOnMoves(BoardModel state, byte player) {
+	private List<Point> getListOfAllGravityOnMoves(BoardModel state) {
 		List<Point> moveList = new ArrayList<>();
 		
 		for(int x = 0; x < state.getWidth(); x++) {
@@ -297,7 +297,6 @@ public class HolyMolyItsACannoliAI extends CKPlayer {
 					return Integer.MAX_VALUE;
 			}			
 		}
-		System.out.println("vertical: " + vertical);
 		
 		//LV
 		for (int j = y-1; j >=0; j--) {
@@ -330,16 +329,17 @@ public class HolyMolyItsACannoliAI extends CKPlayer {
 	protected int alphaBetaPruningGravityOnMove(BoardModel state, int depth, int alpha, int beta, byte maxPlayer) {
 		if (depth == 0 || !state.hasMovesLeft()) {
 			int heuristic = consecutiveTileHuristic(state, maxPlayer);
-			//System.out.println("H: " + heuristic);
-			return heuristic;// + DPHeuristic(state, maxPlayer));
+			if (heuristic == Integer.MAX_VALUE || heuristic == Integer.MIN_VALUE)
+				return heuristic;
+			heuristic += DPHeuristic(state, maxPlayer);
+			return heuristic;
 		}
-		List<Point> moveList = getListOfAllGravityOnMoves(state, maxPlayer);
+		List<Point> moveList = getListOfAllGravityOnMoves(state);
 		
 		if (maxPlayer == this.player) {
 			int v = Integer.MIN_VALUE;
 			for (Point p : moveList) {
-				BoardModel tmpMove = state.clone();
-				tmpMove.placePiece(p, this.player);
+				BoardModel tmpMove = state.placePiece(p, this.player);
 				v = Math.max(v, alphaBetaPruningGravityOnMove(tmpMove, depth - 1, alpha, beta, this.otherPlayer));
 				alpha = Math.max(alpha, v);
 				if (beta <= alpha)
@@ -349,8 +349,7 @@ public class HolyMolyItsACannoliAI extends CKPlayer {
 		} else {
 			int v = Integer.MAX_VALUE;
 			for (Point p: moveList) {
-				BoardModel tmpMove = state.clone();
-				tmpMove.placePiece(p, this.otherPlayer);
+				BoardModel tmpMove = state.placePiece(p, this.otherPlayer);
 				v = Math.min(v, alphaBetaPruningGravityOnMove(tmpMove, depth-1, alpha, beta, this.player));
 				beta = Math.min(beta, v);
 				if (beta <= alpha) 
@@ -368,19 +367,16 @@ public class HolyMolyItsACannoliAI extends CKPlayer {
 		PriorityQueue<PointWithHeuristic> pq = new PriorityQueue<PointWithHeuristic>(100, comparator);
 		int depth = 0;
 		if (state.gravityEnabled()) {
-			depth = 1;
-			moveList = getListOfAllGravityOnMoves(state, this.player);
-		} else {
 			depth = 4;
+			moveList = getListOfAllGravityOnMoves(state);
+		} else {
+			depth = 2;
 			moveList = getListOfAllGravityOffMoves(state, this.player);
 		}
-	
-		for (Point p : moveList) {
-			int v = Integer.MIN_VALUE;
-			BoardModel tmpMove = state.clone();
-			tmpMove.placePiece(p, this.player);
-			v = Math.max(v, alphaBetaPruningGravityOnMove(tmpMove, depth, Integer.MIN_VALUE, Integer.MAX_VALUE, this.otherPlayer));
-			//System.out.println("bestVal for " + p.getX() + ":" + p.getY() + " is - " + bestVal);
+		int v;
+		for (Point p : moveList) {			
+			BoardModel tmpMove = state.placePiece(p, this.player);
+			v = alphaBetaPruningGravityOnMove(tmpMove, depth, Integer.MIN_VALUE, Integer.MAX_VALUE, this.otherPlayer);
 			PointWithHeuristic pwh = new PointWithHeuristic(p, v);
 			pq.add(pwh);
 		}		
