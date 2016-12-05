@@ -5,11 +5,25 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.PriorityQueue;
+import java.util.Random;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 
 public class HolyMolyItsACannoliAI extends CKPlayer {
 	public byte player;
 	public byte otherPlayer;
+	public long startTime;
+	public long timeLimit;
+	public long cushionTime = 1000;
+	
+	//for IDS
+	public int CURRENT_HEURISTICS_SCORE = Integer.MIN_VALUE;
+	public int DEPTH = 0;
 
 	public HolyMolyItsACannoliAI(byte player, BoardModel state) {
 		super(player, state);
@@ -64,6 +78,7 @@ public class HolyMolyItsACannoliAI extends CKPlayer {
 		return moveList;
 	}
 	
+	//DPHeuristic tries to focus on clustering the tiles together when the gravity is off.	
 	//bU is the point above
 	//bL is the point to left
 	//bD is point diagonal
@@ -77,21 +92,21 @@ public class HolyMolyItsACannoliAI extends CKPlayer {
 			minPlayer = 1;
 		
 		// initial column
-		for (int y = height - 1; y >= 0; y--) {
+		for (int y = 0; y < height; y++) {
 			byte b = state.getSpace(0, y);
 			if (b != 0) { // not empty square				
-				if ((y+1) < height) {
-					byte bU = state.getSpace(0, y+1);
+				if ((y-1) >= 0) {
+					byte bU = state.getSpace(0, y-1);
 					if (b == minPlayer) {  // is adversary						
 						if (bU == minPlayer)  //if is also adversary
-							board[0][y] = (byte)(((byte) -1) + board[0][y+1]);						
+							board[0][y] = (byte)(((byte) -1) + board[0][y-1]);						
 						else 
 							board[0][y] = (byte) -1;
 						minSum += board[0][y];
 					}
 					else { // is you
 						if (bU == maxPlayer) 
-							board[0][y] = (byte) (((byte) 1) + board[0][y+1]);
+							board[0][y] = (byte) (((byte) 1) + board[0][y-1]);
 						else
 							board[0][y] = (byte) 1;
 						maxSum += board[0][y];
@@ -111,25 +126,25 @@ public class HolyMolyItsACannoliAI extends CKPlayer {
 		
 		//subsequent columns
 		for (int x = 1; x < width; x++) {
-			for (int y = height - 1; y >= 0; y--) {
+			for (int y = 0; y < height; y++) {
 				byte b = state.getSpace(x-1, y);
 				byte bU, bL, bD;
 				board[1][y] = (byte) 0;
 				if (b != 0) { //not empty					
-					if ((y+1) < height) {
-						bU = state.getSpace(x, y+1);
-						bD = state.getSpace(x-1, y+1);
+					if ((y-1) >= 0) {
+						bU = state.getSpace(x, y-1);
+						bD = state.getSpace(x-1, y-1);
 						if (b == minPlayer) {
 							if (bU == minPlayer) 
-								board[1][y] += (byte) (board[1][y+1]);
+								board[1][y] += (byte) (board[1][y-1]);
 							if (bD == minPlayer)
-								board[1][y] += (byte) (board[0][y+1]);							
+								board[1][y] += (byte) (board[0][y-1]);							
 						}
 						else {
 							if (bU == maxPlayer) 
-								board[1][y] += (byte) (board[1][y+1]);
+								board[1][y] += (byte) (board[1][y-1]);
 							if (bD == maxPlayer)
-								board[1][y] += (byte)(board[0][y+1]);							
+								board[1][y] += (byte)(board[0][y-1]);							
 						}
 					} else {//add check if b is not empty
 						if (b == minPlayer)
@@ -167,11 +182,10 @@ public class HolyMolyItsACannoliAI extends CKPlayer {
 		return (maxSum-minSum);
 	}
 	
-	private int consecutiveHelper(BoardModel state, int x, int y, byte player) {
+	//group of helper functions for main heuristics.
+	private int leftUpperDiagonal(BoardModel state, int x, int y, byte player) {
 		boolean breakflag = false;
-		int playerOpportunity = 1, leftDiagonal = 1, rightDiagonal = 1, vertical = 1, horizontal = 1,
-				opportunityVal = 5, currentSpace;
-		
+		int currentSpace, leftDiagonal = 0;
 		//LUD
 		for (int i = x-1; i >= 0; i--) {
 			if (breakflag)
@@ -179,163 +193,390 @@ public class HolyMolyItsACannoliAI extends CKPlayer {
 			for (int j = y+1; j < state.getHeight(); j++) {
 				currentSpace = state.getSpace(i, j);
 				if (currentSpace != player) {
-					if (currentSpace == 0)  
-						playerOpportunity += opportunityVal;
 					breakflag = true;
 					break;
 				}
 				if (currentSpace == player) {
-					if (++leftDiagonal >= state.getkLength())
-						return Integer.MAX_VALUE;
+					++leftDiagonal;
 				}
 			}
 		}
-		
-		breakflag = false;
+		return leftDiagonal;
+	}
+	
+	private int leftLowerDiagonal(BoardModel state, int x, int y, byte player) {
 		//LLD
+		boolean breakflag = false;
+		int currentSpace, leftDiagonal = 0;
 		for (int i = x-1; i >= 0; i--) {
 			if (breakflag)
 				break;
 			for (int j = y-1; j > 0; j--) {
 				currentSpace = state.getSpace(i, j);
 				if (currentSpace != player) {
-					if (currentSpace == 0) 
-						playerOpportunity += opportunityVal;
 					breakflag = true;
 					break;
 				}
 				if (currentSpace == player) {
-					if (++leftDiagonal >= state.getkLength())
-						return Integer.MAX_VALUE;
+					++leftDiagonal;
 				}
 			}
 		}
-		
-		breakflag = false;
+		return leftDiagonal;
+	}
+	
+	private int rightUpperDiagonal(BoardModel state, int x, int y, byte player) {
 		//RUD
+		boolean breakflag = false;
+		int currentSpace, rightDiagonal = 0;
 		for (int i = x+1; i < state.getWidth(); i++) {
 			if (breakflag)
 				break;
 			for (int j = y+1; j < state.getHeight(); j++) {
 				currentSpace = state.getSpace(i, j);
 				if (currentSpace != player) {
-					if (currentSpace == 0) 
-						playerOpportunity += opportunityVal;
 					breakflag = true;
 					break;
 				}
 				if (currentSpace == player) {
-					if (++rightDiagonal >= state.getkLength())
-						return Integer.MAX_VALUE;
+					++rightDiagonal;
 				}
 			}
 		}
-		
-		breakflag = false;
+		return rightDiagonal;
+	}
+	
+	private int rightLowerDiagonal(BoardModel state, int x, int y, byte player) {
 		//RLD
+		boolean breakflag = false;
+		int currentSpace, rightDiagonal = 0;
 		for (int i = x+1; i < state.getWidth(); i++) {
 			if (breakflag)
 				break;
 			for (int j = y-1; j > 0; j--) {
 				currentSpace = state.getSpace(i, j);
 				if (currentSpace != player) {
-					if (currentSpace == 0) 
-						playerOpportunity += opportunityVal;
 					breakflag = true;
 					break;
 				}
 				if (currentSpace == player) {
-					if (++rightDiagonal >= state.getkLength())
-						return Integer.MAX_VALUE;
+					++rightDiagonal;
 				}
 			}
 		}
-		
-		breakflag = false;
+		return rightDiagonal;
+	}
+	
+	private int leftHorizontal(BoardModel state, int x, int y, byte player) {
 		//LH
+		int currentSpace, horizontal = 0;
 		for (int i = x-1; i >= 0; i--) {
 			int j = y;
 			currentSpace = state.getSpace(i, j);
 			if (currentSpace != player) {
-				if (currentSpace == 0) 
-					playerOpportunity += opportunityVal;
-				break;
+				break;					
 			}
-			else {
-				if (++horizontal >= state.getkLength()) 
-					return Integer.MAX_VALUE;
+			else if (currentSpace == player) {
+				horizontal++;
 			}			
 		}
-		
+		return horizontal;
+	}
+	
+	private int rightHorizontal(BoardModel state, int x, int y, byte player) {
 		//RH
+		int currentSpace, horizontal = 0;
 		for (int i = x+1; i < state.getWidth(); i++) {
 			int j = y;
 			currentSpace = state.getSpace(i, j);
 			if (currentSpace != player) {
-				if (currentSpace == 0) 
-					playerOpportunity += opportunityVal;
-				break;
+				horizontal = 0;
+				break;				
 			}
-			else {
-				if (++horizontal >= state.getkLength()) 
-					return Integer.MAX_VALUE;
+			else if (currentSpace == player) {
+				++horizontal;
 			}			
 		}
+		return horizontal;
+	}
 		
+	private int upperVertical(BoardModel state, int x, int y, byte player) {
 		//UV
+		int currentSpace, vertical = 0;
 		for (int j = y+1; j < state.getHeight(); j++) {
 			int i = x;
 			currentSpace = state.getSpace(i, j);
 			if (currentSpace != player) {
-				if (currentSpace == 0) 
-					playerOpportunity += opportunityVal;
-				break;
+				vertical = 0;
+				break;		
 			}
-			else {
+			else if (currentSpace == player) {
 				vertical++;
-				if (vertical >= state.getkLength()) 
-					return Integer.MAX_VALUE;
 			}			
 		}
-		
+		return vertical;
+	}
+	
+	private int lowerVertical(BoardModel state, int x, int y, byte player) {
 		//LV
+		int currentSpace, vertical = 0;
 		for (int j = y-1; j >=0; j--) {
 			int i = x;
 			currentSpace = state.getSpace(i, j);
 			if (currentSpace != player) {
-				if (currentSpace == 0) 
-					playerOpportunity += opportunityVal;
+				vertical = 0;
 				break;
 			}
-			else {
-				if (++vertical >= state.getkLength()) 
-					return Integer.MAX_VALUE;
+			else if (currentSpace == player) {
+				++vertical;
+			}			
+		}
+		return vertical;
+	}
+	
+	
+	private int numberOfWins(BoardModel state, byte player) {
+		List<Point> moveList;
+		if (state.gravityEnabled())
+			moveList = getListOfAllGravityOnMoves(state);
+		else 
+			moveList = getListOfAllGravityOffMoves(state, player);
+		
+		int LUD = 0, RUD = 0, LLD = 0, RLD = 0, LH = 0, RH = 0, UV = 0, LV = 0; 
+		for (Point p : moveList) {
+			LUD += leftUpperDiagonal(state, p.x, p.y, player);
+			RUD += rightUpperDiagonal(state, p.x, p.y, player);
+			LLD += leftLowerDiagonal(state, p.x, p.y, player);
+			RLD += rightLowerDiagonal(state, p.x, p.y, player);
+			LH += leftHorizontal(state, p.x, p.y, player);
+			RH += rightHorizontal(state, p.x, p.y, player);
+			UV += upperVertical(state, p.x, p.y, player);
+			LV += lowerVertical(state, p.x, p.y, player);
+		}
+		int k = state.getkLength();
+		int horizontalWins = (LH+RH) % k;
+		int verticalWins = (UV+LV) % k;
+		int leftDiagonalWins = (LUD+RLD) % k;
+		int rightDiagonalWins = (RUD+LLD) % k;
+		
+		int playerBit = player == this.player ? 1 : -1;
+		
+		return playerBit*(horizontalWins+verticalWins+leftDiagonalWins+rightDiagonalWins);
+	}
+	
+	
+	/*
+	 * this heuristic counts the difference of WINS between each player. if player has less wins, return MIN_VALUE
+	 */
+	public int baseCaseWinDiff(BoardModel state) { 
+		int[] count = {0,0,0}; //[this Player - 0, Enemy - 1, Empty - 2]
+		int playerWins = 0, enemyWins = 0;
+		
+		//ROWS
+		for (int y = 0; y < state.getHeight(); y++) {
+			for (int x = 0; x < state.getWidth(); x++) {
+				if (state.getSpace(x, y) == 0) { //Empty; increment all 
+					count[0] += 1;
+					count[1] += 1;
+					count[2] += 1;
+				} else if (state.getSpace(x,y) == this.player) {
+					count[0] += 1;
+					count[1] = 0;
+					count[2] = 0;
+				} else { //Enemy player
+					count[0] = 0;
+					count[1] += 1;
+					count[2] = 0;
+				}				
+				if (count[0] % state.getkLength() == 0) {
+					count[0] -= 1;
+					playerWins++;
+				}
+				if (count[1] % state.getkLength() == 0) {
+					count[1] -= 1;
+					enemyWins++;
+				}
+			}
+		}
+		
+		//COLUMNS
+		for (int x = 0; x < state.getWidth(); x++) {
+			for (int y = 0; y < state.getHeight(); y++) {
+				if (state.getSpace(x, y) == 0) { //Empty; increment all 
+					count[0] += 1;
+					count[1] += 1;
+					count[2] += 1;
+				} else if (state.getSpace(x,y) == this.player) {
+					count[0] += 1;
+					count[1] = 0;
+					count[2] = 0;
+				} else { //Enemy player
+					count[0] = 0;
+					count[1] += 1;
+					count[2] = 0;
+				}				
+				if (count[0] % state.getkLength() == 0) {
+					count[0] -= 1;
+					playerWins++;
+				}
+				if (count[1] % state.getkLength() == 0) {
+					count[1] -= 1;
+					enemyWins++;
+				}
+			}
+		}
+		
+		//LEFT DIAGONAL 
+		for (int x = 0; x < state.getWidth(); x++) {
+			int savedX = x, y = 0;
+			while (savedX >= 0) {
+				if (y>=state.getHeight()) {break;}
+				if (state.getSpace(x, y) == 0) { //Empty; increment all 
+					count[0] += 1;
+					count[1] += 1;
+					count[2] += 1;
+				} else if (state.getSpace(x,y) == this.player) {
+					count[0] += 1;
+					count[1] = 0;
+					count[2] = 0;
+				} else { //Enemy player
+					count[0] = 0;
+					count[1] += 1;
+					count[2] = 0;
+				}				
+				if (count[0] % state.getkLength() == 0) {
+					count[0] -= 1;
+					playerWins++;
+				}
+				if (count[1] % state.getkLength() == 0) {
+					count[1] -= 1;
+					enemyWins++;
+				}
+				
+				savedX--;
+				y++;
+			}	
+		}
+
+		
+		//LEFT DIAGONAL 2
+		for (int y = 1; y < state.getHeight(); y++) {
+			int tmpX = state.getHeight()-1, tmpY = y;
+			while (tmpY < state.getHeight()) {
+				if (tmpX < 0) {break;}
+				if (state.getSpace(tmpX, tmpY) == 0) { //Empty; increment all 
+					count[0] += 1;
+					count[1] += 1;
+					count[2] += 1;
+				} else if (state.getSpace(tmpX,tmpY) == this.player) {
+					count[0] += 1;
+					count[1] = 0;
+					count[2] = 0;
+				} else { //Enemy player
+					count[0] = 0;
+					count[1] += 1;
+					count[2] = 0;
+				}				
+				if (count[0] % state.getkLength() == 0) {
+					count[0] -= 1;
+					playerWins++;
+				}
+				if (count[1] % state.getkLength() == 0) {
+					count[1] -= 1;
+					enemyWins++;
+				}
+				
+				tmpY++;
+				tmpX--;
+			}
+		}
+		
+		
+		//RIGHT DIAGONAL 1
+		for (int y = (state.getHeight()-1); y >= 0; y--) {
+			int x = 0, tmpY = y; 
+			while (tmpY < state.getHeight()) {
+				if (x>=state.getWidth()) {break;}
+				if (state.getSpace(x, tmpY) == 0) { //Empty; increment all 
+					count[0] += 1;
+					count[1] += 1;
+					count[2] += 1;
+				} else if (state.getSpace(x,tmpY) == this.player) {
+					count[0] += 1;
+					count[1] = 0;
+					count[2] = 0;
+				} else { //Enemy player
+					count[0] = 0;
+					count[1] += 1;
+					count[2] = 0;
+				}				
+				if (count[0] % state.getkLength() == 0) {
+					count[0] -= 1;
+					playerWins++;
+				}
+				if (count[1] % state.getkLength() == 0) {
+					count[1] -= 1;
+					enemyWins++;
+				}
+				
+				tmpY++;
+				x++;
 			}			
 		}
 		
-		
-		return (playerOpportunity + rightDiagonal + leftDiagonal + vertical + horizontal);
-	}
-	
-	private int consecutiveTileHuristic(BoardModel state, byte player) {
-		int sum = 0;
-		for (int x = 0; x < state.getWidth(); x++) {
-			for (int y = 0; y < state.getHeight(); y++) {
-				sum += consecutiveHelper(state, x, y, player);
+		//RIGHT DIAGONAL 2
+		for (int x = 1; x < state.getWidth(); x++) {
+			int y = 0, tmpX = x;
+			while(tmpX < state.getWidth()) {
+				if (y>=state.getHeight()) {break;}
+				if (state.getSpace(tmpX, y) == 0) { //Empty; increment all 
+					count[0] += 1;
+					count[1] += 1;
+					count[2] += 1;
+				} else if (state.getSpace(tmpX,y) == this.player) {
+					count[0] += 1;
+					count[1] = 0;
+					count[2] = 0;
+				} else { //Enemy player
+					count[0] = 0;
+					count[1] += 1;
+					count[2] = 0;
+				}				
+				if (count[0] % state.getkLength() == 0) {
+					count[0] -= 1;
+					playerWins++;
+				}
+				if (count[1] % state.getkLength() == 0) {
+					count[1] -= 1;
+					enemyWins++;
+				}
+				tmpX++;
+				y++;
 			}
 		}
-		return sum;
-	}
-	protected int alphaBetaPruningGravityOnMove(BoardModel state, int depth, int alpha, int beta, byte maxPlayer) {
-		if (depth == 0 || !state.hasMovesLeft()) {
-			int heuristic = consecutiveTileHuristic(state, maxPlayer);
-			if (heuristic == Integer.MAX_VALUE || heuristic == Integer.MIN_VALUE)
-				return heuristic;
-			heuristic += DPHeuristic(state, maxPlayer);
-			return heuristic;
-		}
-		List<Point> moveList = getListOfAllGravityOnMoves(state);
 		
+		if (playerWins <= enemyWins) {
+			return Integer.MIN_VALUE;
+		}
+		return (playerWins-enemyWins);
+	}
+	
+	
+	protected int alphaBetaPruningGravityOnMove(BoardModel state, int depth, int alpha, int beta, byte maxPlayer) {
+		if (depth == 0 || !state.hasMovesLeft()) {		
+			int heuristic = baseCaseWinDiff(state);
+			if (!state.gravity) {				
+				heuristic += DPHeuristic(state, maxPlayer);
+			}
+			
+			heuristic += numberOfWins(state, maxPlayer); 
+			return heuristic;
+		} 
+		List<Point> moveList;
+		if (state.gravityEnabled())
+			moveList = getListOfAllGravityOnMoves(state);
+		else 
+			moveList = getListOfAllGravityOffMoves(state, maxPlayer);
 		if (maxPlayer == this.player) {
 			int v = Integer.MIN_VALUE;
 			for (Point p : moveList) {
@@ -363,31 +604,64 @@ public class HolyMolyItsACannoliAI extends CKPlayer {
 	@Override
 	public Point getMove(BoardModel state) {
 		List<Point> moveList;
-		Comparator<PointWithHeuristic> comparator = new HeuristicsComparator();
-		PriorityQueue<PointWithHeuristic> pq = new PriorityQueue<PointWithHeuristic>(100, comparator);
-		int depth = 0;
+
 		if (state.gravityEnabled()) {
-			depth = 4;
+			if (state.lastMove == null) {
+				return new Point(state.getWidth()/2, 0);
+			}
 			moveList = getListOfAllGravityOnMoves(state);
 		} else {
-			depth = 2;
+			if (state.lastMove == null) {
+				return new Point(state.getWidth()/2, state.getHeight()/2);
+			}
 			moveList = getListOfAllGravityOffMoves(state, this.player);
 		}
-		int v;
-		for (Point p : moveList) {			
-			BoardModel tmpMove = state.placePiece(p, this.player);
-			v = alphaBetaPruningGravityOnMove(tmpMove, depth, Integer.MIN_VALUE, Integer.MAX_VALUE, this.otherPlayer);
+		int v = Integer.MIN_VALUE;
+		PointWithHeuristic maxPWH = new PointWithHeuristic(new Point(0, 0), Integer.MIN_VALUE);
+		for (Point p : moveList) {		
+			if (System.currentTimeMillis() - this.startTime > (this.timeLimit-this.cushionTime)) {break;}
+			BoardModel tmpMove = state.placePiece(p, this.player);			
+			v = alphaBetaPruningGravityOnMove(tmpMove, DEPTH, Integer.MIN_VALUE, Integer.MAX_VALUE, this.otherPlayer);
 			PointWithHeuristic pwh = new PointWithHeuristic(p, v);
-			pq.add(pwh);
-		}		
-		
-		return pq.remove().getPoint();
+			if (v >= maxPWH.getHeuristic()) {
+				maxPWH = pwh;
+			}			
+		}			
+		CURRENT_HEURISTICS_SCORE = maxPWH.getHeuristic();
+		return maxPWH.getPoint();
 	}
 
-	//Deadline checks the time left for you to make a move (something like that)
+	
 	@Override
 	public Point getMove(BoardModel state, int deadline) {
-		return getMove(state);
+		Point point = null;
+		this.cushionTime = 1500;
+		this.timeLimit = deadline;
+		this.startTime = System.currentTimeMillis();
+		PointWithHeuristic maxPWH = new PointWithHeuristic(new Point(0, 0), Integer.MIN_VALUE);
+		while (System.currentTimeMillis() - this.startTime < (this.timeLimit-this.cushionTime)) {
+			Point move = getMove(state);
+			int score = Integer.MIN_VALUE;
+			if (CURRENT_HEURISTICS_SCORE >= maxPWH.getHeuristic()) {
+				score = CURRENT_HEURISTICS_SCORE;
+				maxPWH = new PointWithHeuristic(move, score);
+			}
+			DEPTH++;
+		}
+		DEPTH = 0;		
+	    if (maxPWH.getHeuristic() == Integer.MIN_VALUE) {
+	    	List<Point> moveList;
+	    	if (state.gravityEnabled()) {
+	    		moveList = getListOfAllGravityOnMoves(state);
+	    	} else {
+	    		moveList = getListOfAllGravityOffMoves(state, this.player);
+	    	}		    		
+	    	point = moveList.get(new Random().nextInt(moveList.size()-1));
+	    } else {
+	    	point = maxPWH.getPoint();
+	    }
+		
+		return point;
 	}
 	
 	//to be put into priorityQ
