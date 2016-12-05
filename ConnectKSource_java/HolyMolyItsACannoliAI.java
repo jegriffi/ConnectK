@@ -561,16 +561,19 @@ public class HolyMolyItsACannoliAI extends CKPlayer {
 		return (playerWins-enemyWins);
 	}
 	
+	public int Eval(BoardModel state, byte maxPlayer) {
+		int heuristic = baseCaseWinDiff(state);
+		if (!state.gravity) {				
+			heuristic += DPHeuristic(state, maxPlayer);
+		}
+		
+		heuristic += numberOfWins(state, maxPlayer); 
+		return heuristic;
+	}
 	
 	protected int alphaBetaPruningGravityOnMove(BoardModel state, int depth, int alpha, int beta, byte maxPlayer) {
 		if (depth == 0 || !state.hasMovesLeft()) {		
-			int heuristic = baseCaseWinDiff(state);
-			if (!state.gravity) {				
-				heuristic += DPHeuristic(state, maxPlayer);
-			}
-			
-			heuristic += numberOfWins(state, maxPlayer); 
-			return heuristic;
+			return Eval(state, maxPlayer);
 		} 
 		List<Point> moveList;
 		if (state.gravityEnabled())
