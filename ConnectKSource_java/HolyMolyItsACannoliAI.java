@@ -388,13 +388,18 @@ public class HolyMolyItsACannoliAI extends CKPlayer {
 					count[1] += 1;
 					count[2] = 0;
 				}				
-				if (count[0] % state.getkLength() == 0) {
+				if ((count[0]+count[2]) / state.getkLength() >= 1) {
 					count[0] -= 1;
-					playerWins++;
+					if (count[0] >= count[2])
+						playerWins++;
+					else 
+						playerWins += 0.5;
 				}
-				if (count[1] % state.getkLength() == 0) {
+				if ((count[1]+count[2]) / state.getkLength() >= 1) {
 					count[1] -= 1;
-					enemyWins++;
+					if (count[1] >= count[2])
+						enemyWins++;
+					else enemyWins += 0.5;
 				}
 			}
 		}
@@ -415,13 +420,18 @@ public class HolyMolyItsACannoliAI extends CKPlayer {
 					count[1] += 1;
 					count[2] = 0;
 				}				
-				if (count[0] % state.getkLength() == 0) {
+				if ((count[0]+count[2]) / state.getkLength() >= 1) {
 					count[0] -= 1;
-					playerWins++;
+					if (count[0] >= count[2])
+						playerWins++;
+					else 
+						playerWins += 0.5;
 				}
-				if (count[1] % state.getkLength() == 0) {
+				if ((count[1]+count[2]) / state.getkLength() >= 1) {
 					count[1] -= 1;
-					enemyWins++;
+					if (count[1] >= count[2])
+						enemyWins++;
+					else enemyWins += 0.5;
 				}
 			}
 		}
@@ -444,13 +454,18 @@ public class HolyMolyItsACannoliAI extends CKPlayer {
 					count[1] += 1;
 					count[2] = 0;
 				}				
-				if (count[0] % state.getkLength() == 0) {
+				if ((count[0]+count[2]) / state.getkLength() >= 1) {
 					count[0] -= 1;
-					playerWins++;
+					if (count[0] >= count[2])
+						playerWins++;
+					else 
+						playerWins += 0.5;
 				}
-				if (count[1] % state.getkLength() == 0) {
+				if ((count[1]+count[2]) / state.getkLength() >= 1) {
 					count[1] -= 1;
-					enemyWins++;
+					if (count[1] >= count[2])
+						enemyWins++;
+					else enemyWins += 0.5;
 				}
 				
 				savedX--;
@@ -477,13 +492,18 @@ public class HolyMolyItsACannoliAI extends CKPlayer {
 					count[1] += 1;
 					count[2] = 0;
 				}				
-				if (count[0] % state.getkLength() == 0) {
+				if ((count[0]+count[2]) / state.getkLength() >= 1) {
 					count[0] -= 1;
-					playerWins++;
+					if (count[0] >= count[2])
+						playerWins++;
+					else 
+						playerWins += 0.5;
 				}
-				if (count[1] % state.getkLength() == 0) {
+				if ((count[1]+count[2]) / state.getkLength() >= 1) {
 					count[1] -= 1;
-					enemyWins++;
+					if (count[1] >= count[2])
+						enemyWins++;
+					else enemyWins += 0.5;
 				}
 				
 				tmpY++;
@@ -510,13 +530,18 @@ public class HolyMolyItsACannoliAI extends CKPlayer {
 					count[1] += 1;
 					count[2] = 0;
 				}				
-				if (count[0] % state.getkLength() == 0) {
+				if ((count[0]+count[2]) / state.getkLength() >= 1) {
 					count[0] -= 1;
-					playerWins++;
+					if (count[0] >= count[2])
+						playerWins++;
+					else 
+						playerWins += 0.5;
 				}
-				if (count[1] % state.getkLength() == 0) {
+				if ((count[1]+count[2]) / state.getkLength() >= 1) {
 					count[1] -= 1;
-					enemyWins++;
+					if (count[1] >= count[2])
+						enemyWins++;
+					else enemyWins += 0.5;
 				}
 				
 				tmpY++;
@@ -542,14 +567,20 @@ public class HolyMolyItsACannoliAI extends CKPlayer {
 					count[1] += 1;
 					count[2] = 0;
 				}				
-				if (count[0] % state.getkLength() == 0) {
+				if ((count[0]+count[2]) / state.getkLength() >= 1) {
 					count[0] -= 1;
-					playerWins++;
+					if (count[0] >= count[2])
+						playerWins++;
+					else 
+						playerWins += 0.5;
 				}
-				if (count[1] % state.getkLength() == 0) {
+				if ((count[1]+count[2]) / state.getkLength() >= 1) {
 					count[1] -= 1;
-					enemyWins++;
+					if (count[1] >= count[2])
+						enemyWins++;
+					else enemyWins += 0.5;
 				}
+				
 				tmpX++;
 				y++;
 			}
@@ -558,7 +589,7 @@ public class HolyMolyItsACannoliAI extends CKPlayer {
 		if (playerWins <= enemyWins) {
 			return Integer.MIN_VALUE;
 		}
-		return (playerWins-enemyWins);
+		return (playerWins);
 	}
 	
 	public int Eval(BoardModel state, byte maxPlayer) {
